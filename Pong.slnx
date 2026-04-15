@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Pong.Core/Pong.Core.csproj" />
+  <Project Path="Pong/Pong.csproj" />
+</Solution>
