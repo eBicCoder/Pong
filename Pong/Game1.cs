@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using Pong.Core;
+//using System.Windows.Forms;
 
 namespace Pong
 {
@@ -71,6 +72,19 @@ namespace Pong
             if (keyboardState.IsKeyDown(Keys.Down))
                 Board.ChangePlayerPos(Board.Player2, deltaTime, Board.Direction.Down);
 
+            if (keyboardState.IsKeyDown(Keys.P))
+            {
+                if (Board.State == Board.GameState.Playing ||
+                    Board.State == Board.GameState.TempPause)
+                    Board.State = Board.GameState.Paused;
+
+                if (Board.State == Board.GameState.Paused)
+                {
+                    Board.goalPause = 0;
+                    Board.State = Board.GameState.TempPause;
+                }    
+            }
+
             Board.Tick(deltaTime);
 
             base.Update(gameTime);
@@ -82,6 +96,13 @@ namespace Pong
 
             // TODO: Add your drawing code here
             _spriteBatch.Begin();
+
+            if (Board.State == Board.GameState.MainMenu)
+            {
+                _spriteBatch.End();
+                base.Draw(gameTime);
+                return;
+            }
 
             (float xBallULC, float yBallULC) = BoardToMonitorPos(Board.Ball.ULCorner.Item1, Board.Ball.ULCorner.Item2);
             _spriteBatch.Draw(
@@ -152,6 +173,11 @@ namespace Pong
                 SpriteScale,
                 SpriteEffects.None,
                 0);
+
+            if (Board.State == Board.GameState.Paused)
+            {
+
+            }
 
             _spriteBatch.End();
             base.Draw(gameTime);

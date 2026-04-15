@@ -18,12 +18,13 @@ namespace Pong.Core
             Player2 = player2;
             Ball = ball;
             BorderLength = MathF.Abs(player1.X - player2.X) * 1.2f;
+            State = GameState.TempPause;
         }
 
         public int Height { get; init; }
-        public Player Player1 { get; init; }
-        public Player Player2 { get; init; }
-        public Ball Ball { get; init; }
+        public Player Player1 { get; set; }
+        public Player Player2 { get; set; }
+        public Ball Ball { get; set; }
         public float BorderLength { get; private set; }
         public GameState State { get; set; }
 
@@ -31,7 +32,7 @@ namespace Pong.Core
         { Up, Down }
 
         public enum GameState
-        { Playing, GoalPause, Paused, MainMenu }
+        { Playing, TempPause, Paused, MainMenu }
 
         public void ChangePlayerPos(Player player, double deltaTime, Direction direction)
         {
@@ -57,7 +58,7 @@ namespace Pong.Core
                     throw new Exception("Unhandled direction");
             }
         }
-        private double goalPause = 0;
+        public double goalPause = 0;
         public bool Tick(double deltaTime)
         {
             switch (State)
@@ -68,7 +69,7 @@ namespace Pong.Core
                 case GameState.Paused:
                     return false;
 
-                case GameState.GoalPause:
+                case GameState.TempPause:
                     goalPause += deltaTime;
                     int pause = 3;
                     if (goalPause >= pause)
@@ -144,7 +145,7 @@ namespace Pong.Core
                         PointScored(ballX);
                         ResetBall();
                         pointScored = true;
-                        State = GameState.GoalPause;
+                        State = GameState.TempPause;
                     }
 
                     return pointScored;
