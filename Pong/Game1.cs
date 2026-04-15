@@ -25,6 +25,7 @@ namespace Pong
             IsMouseVisible = true;
             Window.ClientSizeChanged += OnResize;
             Window.AllowUserResizing = true;
+            Window.Title = "Pong 6.7";
         }
 
         protected override void Initialize()
@@ -32,7 +33,7 @@ namespace Pong
             // TODO: Add your initialization logic here
             Player player1 = new Player(32, 256, PĺayerSpeed, -900);
             Player player2 = new Player(32, 256, PĺayerSpeed, 900);
-            Ball ball = new Ball(32, 1f);
+            Ball ball = new Ball(32, 0);
             Board = new Board(1200, player1, player2, ball);
 
             ChangeSpriteScale();

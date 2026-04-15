@@ -26,5 +26,6 @@ namespace Pong.Core
         public (float, float) URCorner => (X + Width / 2f, Y + Height / 2f);
         public (float, float) BLCorner => (X - Width / 2f, Y - Height / 2f);
         public (float, float) BRCorner => (X + Width / 2f, Y - Height / 2f);
+        public int Score = 0;
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -9,6 +10,7 @@ namespace Pong.Core
 {
     public class Board
     {
+        public Random RND = new Random();
         public Board(int height, Player player1, Player player2, Ball ball)
         {
             Height = height;
@@ -23,9 +25,13 @@ namespace Pong.Core
         public Player Player2 { get; init; }
         public Ball Ball { get; init; }
         public float BorderLength { get; private set; }
+        public GameState State { get; set; }
 
         public enum Direction
         { Up, Down }
+
+        public enum GameState
+        { Playing, GoalPause, Paused, MainMenu }
 
         public void ChangePlayerPos(Player player, double deltaTime, Direction direction)
         {
@@ -51,53 +57,123 @@ namespace Pong.Core
                     throw new Exception("Unhandled direction");
             }
         }
-
-        public void Tick(double deltaTime) // opravit fyziku odrážení od hráče
+        private double goalPause = 0;
+        public bool Tick(double deltaTime)
         {
-            float ballX = Ball.X + (float)(MathF.Cos(Ball.Direction) * Ball.Speed * deltaTime);
-            float ballY = Ball.Y + (float)(MathF.Sin(Ball.Direction) * Ball.Speed * deltaTime);
-
-            if (ballX - Ball.Size / 2 <= Player1.X + Player1.Width / 2 && ballX >= Player1.X)
+            switch (State)
             {
-                if (ballY - Ball.Size / 2 <= Player1.URCorner.Item2 &&
-                    ballY + Ball.Size / 2 >= Player1.BRCorner.Item2)
-                {
-                    ballX = Player1.X + Player1.Width / 2 + Ball.Size / 2;
+                case GameState.MainMenu:
+                    return false;
 
-                    //float direction = Math.Clamp(MathF.PI - (Ball.Direction - (ballY - Player1.Y) / (Player1.Height / 2), -1f, +1f));
-                    Ball.Direction = Math.Clamp(MathF.PI - (Ball.Direction - (ballY - Player1.Y) / (Player1.Height / 2) * MathF.PI / 2), -1f, +1f);
-                }
+                case GameState.Paused:
+                    return false;
+
+                case GameState.GoalPause:
+                    goalPause += deltaTime;
+                    int pause = 3;
+                    if (goalPause >= pause)
+                    {
+                        State = GameState.Playing;
+                        goalPause = 0;
+                    }
+                    return false;
+
+                case GameState.Playing:
+                    bool pointScored = false;
+
+                    float vX = (float)(MathF.Cos(Ball.Direction) * Ball.Speed * deltaTime);
+                    float vY = (float)(MathF.Sin(Ball.Direction) * Ball.Speed * deltaTime);
+
+                    float ballX = Ball.X + vX;
+                    float ballY = Ball.Y + vY;
+
+                    if (ballX - Ball.Size / 2 <= Player1.X + Player1.Width / 2 &&
+                        vX < 0 &&
+                        ballX >= Player1.X - Player1.Width / 2)
+                    {
+                        if (ballY - Ball.Size / 2 <= Player1.URCorner.Item2 &&
+                            ballY + Ball.Size / 2 >= Player1.BRCorner.Item2)
+                        {
+                            ballX = Player1.X + Player1.Width / 2 + Ball.Size / 2;
+
+                            float offset = (ballY - Player1.Y) / (Player1.Height * 0.5f); // gets how far from centre the ball hit
+                            offset = Math.Clamp(offset, -1f, 1f); // we clamp it just to be sure (can be a little bit more than 1)
+
+                            Ball.Direction = MathF.Sign(offset) * MathF.Pow(offset, 2) * MathF.PI / 3; // offset squared because i like it more
+                        }                                                                               // the ball feels more predictable
+                    }
+
+                    if (ballX + Ball.Size / 2 >= Player2.X - Player2.Width / 2 &&
+                        vX > 0 &&
+                        ballX < Player2.X + Player2.Width / 2)
+                    {
+                        if (ballY - Ball.Size / 2 <= Player2.URCorner.Item2 &&
+                            ballY + Ball.Size / 2 >= Player2.BRCorner.Item2)
+                        {
+                            ballX = Player2.X - Player2.Width / 2 - Ball.Size / 2;
+
+                            float offset = (ballY - Player2.Y) / (Player2.Height * 0.5f);
+                            offset = Math.Clamp(offset, -1f, 1f);
+
+                            Ball.Direction = MathF.PI - MathF.Sign(offset) * MathF.Pow(offset, 2) * MathF.PI / 3;
+                        }
+                    }
+
+                    if ((ballY + Ball.Size / 2 >= Height / 2) &&
+                        (ballX + Ball.Size / 2 >= -BorderLength / 2 && ballX - Ball.Size / 2 <= BorderLength / 2))
+                    {
+                        Ball.Direction = -Ball.Direction;
+                        ballY = Height / 2 - Ball.Size / 2;
+                    }
+                    if ((ballY - Ball.Size / 2 <= -Height / 2) &&
+                        (ballX + Ball.Size / 2 >= -BorderLength / 2 && ballX - Ball.Size / 2 <= BorderLength / 2))
+                    {
+                        Ball.Direction = -Ball.Direction;
+                        ballY = -Height / 2 + Ball.Size / 2;
+                    }
+
+                    float ballAcceleration = 10;
+                    int maxSpeed = 2000;
+                    Ball.Speed = MathF.Min((float)(Ball.Speed + ballAcceleration * deltaTime), maxSpeed); // we cap max speed of the ball so it doesnt get too fast
+                    Debug.WriteLine(Ball.Speed);
+                    Ball.X = ballX;
+                    Ball.Y = ballY;
+
+                    if (ballX < -BorderLength / 2 || ballX > BorderLength / 2)
+                    {
+                        PointScored(ballX);
+                        ResetBall();
+                        pointScored = true;
+                        State = GameState.GoalPause;
+                    }
+
+                    return pointScored;
+
+                default:
+                    throw new NotImplementedException("Not implemented enum GameState");
+            }
+        }
+
+        private void ResetBall()
+        {
+            Ball.X = 0;
+            Ball.Y = 0;
+            Ball.Speed = Ball.InitialSpeed;
+        }
+
+        private void PointScored(float x)
+        {
+            if (x < -BorderLength / 2)
+            {
+                Ball.Direction = MathF.PI + MathF.PI / 3 - 2 * RND.NextSingle() * MathF.PI / 3;
+                Player2.Score++;
             }
 
-            if (ballX + Ball.Size / 2 >= Player2.X - Player2.Width / 2 && ballX < Player2.X)
+            else
             {
-                if (ballY - Ball.Size / 2 <= Player2.URCorner.Item2 &&
-                    ballY + Ball.Size / 2 >= Player2.BRCorner.Item2)
-                {
-                    ballX = Player2.X - Player2.Width / 2 - Ball.Size / 2;
-
-                    Ball.Direction = Math.Clamp(MathF.PI - (Ball.Direction - (ballY - Player2.Y) / (Player2.Height / 2) * MathF.PI / 2), MathF.PI - 1f, MathF.PI + 1f);
-                }
+                Ball.Direction = MathF.PI / 3 - 2 * RND.NextSingle() * MathF.PI / 3;
+                Player1.Score++;
             }
-
-            if ((ballY + Ball.Size / 2 >= Height / 2) &&
-                (ballX + Ball.Size / 2 >= -BorderLength / 2 && ballX - Ball.Size / 2 <= BorderLength / 2))
-            {
-                Ball.Direction = -Ball.Direction;
-                ballY = Height / 2 - Ball.Size / 2;
-            }
-            if ((ballY - Ball.Size / 2 <= -Height / 2) &&
-                (ballX + Ball.Size / 2 >= -BorderLength / 2 && ballX - Ball.Size / 2 <= BorderLength / 2))
-            {
-                Ball.Direction = -Ball.Direction;
-                ballY = -Height / 2 + Ball.Size / 2;
-            }
-
-            float ballAcceleration = 10;
-            Ball.Speed += (float)(ballAcceleration * deltaTime);
-
-            Ball.X = ballX;
-            Ball.Y = ballY;
         }
     }
 }

@@ -2,17 +2,19 @@
 {
     public class Ball
     {
-        public Ball(int size, float direction, float speed = 500, int x = 0, int y = 0)
+        public Ball(int size, float direction, float initialSpeed = 500, int x = 0, int y = 0)
         {
             Size = size;
             Direction = direction;
-            Speed = speed;
+            InitialSpeed = initialSpeed;
+            Speed = initialSpeed;
             X = x;
             Y = y;
         }
 
         public int Size { get; init; }
         public float Direction { get; set; }
+        public float InitialSpeed { get; init; }
         public float Speed { get; set; }
         public float X { get; set; }
         public float Y { get; set; }
