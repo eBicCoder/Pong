@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using Pong.Core;
-//using System.Windows.Forms;
+using System.Collections.Generic;
 
 namespace Pong
 {
@@ -53,7 +53,8 @@ namespace Pong
 
         protected override void Update(GameTime gameTime)
         {
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
+            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == Microsoft.Xna.Framework.Input.ButtonState.Pressed || 
+                Keyboard.GetState().IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Escape))
                 Exit();
 
             // TODO: Add your update logic here
@@ -62,17 +63,17 @@ namespace Pong
 
             KeyboardState keyboardState = Keyboard.GetState();
 
-            if (keyboardState.IsKeyDown(Keys.W))
+            if (keyboardState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.W))
                 Board.ChangePlayerPos(Board.Player1, deltaTime, Board.Direction.Up);
-            if (keyboardState.IsKeyDown(Keys.S))
+            if (keyboardState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.S))
                 Board.ChangePlayerPos(Board.Player1, deltaTime, Board.Direction.Down);
 
-            if (keyboardState.IsKeyDown(Keys.Up))
+            if (keyboardState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Up))
                 Board.ChangePlayerPos(Board.Player2, deltaTime, Board.Direction.Up);
-            if (keyboardState.IsKeyDown(Keys.Down))
+            if (keyboardState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Down))
                 Board.ChangePlayerPos(Board.Player2, deltaTime, Board.Direction.Down);
 
-            if (keyboardState.IsKeyDown(Keys.P))
+            if (keyboardState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.P))
             {
                 if (Board.State == Board.GameState.Playing ||
                     Board.State == Board.GameState.TempPause)
