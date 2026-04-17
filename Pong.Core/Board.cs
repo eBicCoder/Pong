@@ -18,7 +18,7 @@ namespace Pong.Core
             Player2 = player2;
             Ball = ball;
             BorderLength = MathF.Abs(player1.X - player2.X) * 1.2f;
-            State = GameState.TempPause;
+            State = GameState.GoalPause;
         }
 
         public int Height { get; init; }
@@ -32,10 +32,16 @@ namespace Pong.Core
         { Up, Down }
 
         public enum GameState
-        { Playing, TempPause, Paused, MainMenu }
+        { Playing, GoalPause, Paused, MainMenu }
 
+        private bool _canMove = true;
         public void ChangePlayerPos(Player player, double deltaTime, Direction direction)
         {
+            if (State == GameState.Paused ||
+                State == GameState.MainMenu ||
+                !_canMove)
+                return;
+
             switch (direction)
             {
                 case Direction.Up:
@@ -58,9 +64,34 @@ namespace Pong.Core
                     throw new Exception("Unhandled direction");
             }
         }
+        private GameState _previousState;
+        public void ChangeState()
+        {
+            if (State == Board.GameState.Playing ||
+                    State == Board.GameState.GoalPause)
+            {
+                _previousState = State;
+                State = Board.GameState.Paused;
+            }
+
+            else if (State == Board.GameState.Paused)
+            {
+                goalPause = 0;
+                State = Board.GameState.GoalPause;
+
+                if (_previousState == GameState.Playing)
+                    _canMove = false;
+
+                else if (_previousState == GameState.GoalPause)
+                    _canMove = true;
+
+                _previousState = State;
+            }
+        }
         public double goalPause = 0;
         public bool Tick(double deltaTime)
         {
+            //Debug.WriteLineIf(deltaTime > 0.0167f, deltaTime);
             switch (State)
             {
                 case GameState.MainMenu:
@@ -69,13 +100,14 @@ namespace Pong.Core
                 case GameState.Paused:
                     return false;
 
-                case GameState.TempPause:
+                case GameState.GoalPause:
                     goalPause += deltaTime;
                     int pause = 3;
                     if (goalPause >= pause)
                     {
                         State = GameState.Playing;
                         goalPause = 0;
+                        _canMove = true;
                     }
                     return false;
 
@@ -145,7 +177,7 @@ namespace Pong.Core
                         PointScored(ballX);
                         ResetBall();
                         pointScored = true;
-                        State = GameState.TempPause;
+                        State = GameState.GoalPause;
                     }
 
                     return pointScored;
