@@ -6,8 +6,9 @@ using SharpDX.DirectWrite;
 using SharpDX.DXGI;
 using System;
 using System.Diagnostics;
+
 using System.Runtime.CompilerServices;
-//using System.Windows.Forms;
+using System.Runtime.InteropServices;
 
 namespace Pong
 {
@@ -26,6 +27,10 @@ namespace Pong
         private Board Board { get; set; }
         private int PĺayerSpeed = 1000;
 
+        private Button PauseButton;
+
+        private bool IsFullScreen;
+
         private KeyboardState _oldKeyBoardState { get; set; }
 
         public Game1()
@@ -33,9 +38,17 @@ namespace Pong
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
-            Window.ClientSizeChanged += OnResize;
+
+            _graphics.PreferredBackBufferWidth = 1280;
+            _graphics.PreferredBackBufferHeight = 720;
+
+            _graphics.ApplyChanges();
+
             Window.AllowUserResizing = true;
+            Window.ClientSizeChanged += OnResize;
+
             Window.Title = "Pong 6.7";
+
             this.IsFixedTimeStep = false;
         }
 
@@ -44,9 +57,18 @@ namespace Pong
             // TODO: Add your initialization logic here
             Player player1 = new Player(32, 256, PĺayerSpeed, -900);
             Player player2 = new Player(32, 256, PĺayerSpeed, 900);
+            
             Ball ball = new Ball(32, 0);
             Board = new Board(1200, player1, player2, ball);
-            Board.State = Board.GameState.MainMenu; 
+
+            Player[] players = { player1, player2 };
+            Player targetPlayer = players[Board.RND.Next(players.Length)];
+            Board.NewRoundBallDirection(targetPlayer);
+
+
+            Debug.WriteLine($"{Board.Ball.Direction}");
+            Board.State = Board.GameState.GoalPause;
+            
             ChangeSpriteScale();
 
             base.Initialize();
@@ -91,12 +113,12 @@ namespace Pong
 
             _oldKeyBoardState = keyboardState;
 
-            Board.Tick(deltaTime);
+            bool pointScored = Board.Tick(deltaTime);
 
             if (Board.State == Board.GameState.Playing)
                 RoundTime += deltaTime;
 
-            if (Board.State == Board.GameState.GoalPause)
+            if (pointScored)
                 RoundTime = 0;
 
             base.Update(gameTime);
@@ -105,7 +127,7 @@ namespace Pong
         public void OnResize(object sender, EventArgs e)
         {
             ChangeSpriteScale();
-            Board.State = Board.GameState.Paused;
+            Board.ResizePause();
         }
         private int ScoreBarHeight = 150;
         private (float, float) BoardToMonitorPos(float x, float y)
@@ -140,10 +162,26 @@ namespace Pong
                 return;
             }
 
-            //_spriteBatch.DrawString(_font, $"{(int)RoundTime}", new Vector2(), Color.LightGreen);
+            int borderWidth = 32;
+
+            Vector2 textAboveBoard = new Vector2(Window.ClientBounds.Width / 2f, (Window.ClientBounds.Height + ScoreBarHeight * SpriteScale) / 2f - (Board.Height / 2f + borderWidth) * SpriteScale);
+            // draws round time
+            int roundTime = (int)Math.Floor(RoundTime);
+            string roundTimeString = roundTime.ToString();
+            Vector2 roundTimeStringSize = _font.MeasureString(roundTimeString) * SpriteScale;
+            _spriteBatch.DrawString(_font,
+                                    roundTimeString,
+                                    new Vector2(textAboveBoard.X - roundTimeStringSize.X / 2,
+                                                textAboveBoard.Y - roundTimeStringSize.Y), 
+                                    Color.White, 
+                                    0f, 
+                                    Vector2.Zero,
+                                    SpriteScale,
+                                    SpriteEffects.None,
+                                    0f);
 
             // draws the ball
-            (float xBallULC, float yBallULC) = BoardToMonitorPos(Board.Ball.ULCorner.Item1, Board.Ball.ULCorner.Item2);
+            (float xBallULC, float yBallULC) = BoardToMonitorPos(Board.Ball.ULCorner.X, Board.Ball.ULCorner.Y);
             _spriteBatch.Draw(
                 _ball,
                 new Vector2
@@ -156,8 +194,9 @@ namespace Pong
                 SpriteScale / (64 / Board.Ball.Size),
                 SpriteEffects.None,
                 0);
-            // draws left player
-            (float xPlayer1ULC, float yPlayer1ULC) = BoardToMonitorPos(Board.Player1.ULCorner.Item1, Board.Player1.ULCorner.Item2);
+
+            // draws player1 (left)
+            (float xPlayer1ULC, float yPlayer1ULC) = BoardToMonitorPos(Board.Player1.ULCorner.X, Board.Player1.ULCorner.Y);
             _spriteBatch.Draw(
                 _player,
                 new Vector2
@@ -170,8 +209,24 @@ namespace Pong
                 SpriteScale,
                 SpriteEffects.None,
                 0);
-            // draws right player
-            (float xPlayer2ULC, float yPlayer2ULC) = BoardToMonitorPos(Board.Player2.ULCorner.Item1, Board.Player2.ULCorner.Item2);
+
+            // draws player1 score
+            (float xPlayer1, float yPlayer1) = BoardToMonitorPos(Board.Player1.X, Board.Player1.Y);
+            string player1ScoreString = Board.Player1.Score.ToString();
+            Vector2 player1ScoreStringSize = _font.MeasureString(player1ScoreString) * SpriteScale;
+            _spriteBatch.DrawString(_font,
+                                    player1ScoreString,
+                                    new Vector2(xPlayer1 - player1ScoreStringSize.X / 2,
+                                                textAboveBoard.Y - player1ScoreStringSize.Y),
+                                    Color.White,
+                                    0f,
+                                    Vector2.Zero,
+                                    SpriteScale,
+                                    SpriteEffects.None,
+                                    0f);
+
+            // draws player2 (right)
+            (float xPlayer2ULC, float yPlayer2ULC) = BoardToMonitorPos(Board.Player2.ULCorner.X, Board.Player2.ULCorner.Y);
             _spriteBatch.Draw(
                 _player,
                 new Vector2
@@ -185,8 +240,22 @@ namespace Pong
                 SpriteEffects.None,
                 0);
 
-            // draws top and bottom border
-            int borderWidth = 32;
+            // draws player2 score
+            (float xPlayer2, float yPlayer2) = BoardToMonitorPos(Board.Player2.X, Board.Player2.Y);
+            string player2ScoreString = Board.Player2.Score.ToString();
+            Vector2 player2ScoreStringSize = _font.MeasureString(player2ScoreString) * SpriteScale;
+            _spriteBatch.DrawString(_font,
+                                    player2ScoreString,
+                                    new Vector2(xPlayer2 - player2ScoreStringSize.X / 2,
+                                                textAboveBoard.Y - player1ScoreStringSize.Y),
+                                    Color.White,
+                                    0f,
+                                    Vector2.Zero,
+                                    SpriteScale,
+                                    SpriteEffects.None,
+                                    0f);
+
+            // draws top border
             _spriteBatch.Draw(
                 _player,
                 new Vector2
@@ -199,7 +268,7 @@ namespace Pong
                 SpriteScale,
                 SpriteEffects.None,
                 0);
-
+            // draws bottom border
             _spriteBatch.Draw(
                 _player,
                 new Vector2
@@ -215,7 +284,21 @@ namespace Pong
 
             if (Board.State == Board.GameState.Paused)
             {
+                string paused = "Paused";
+                Vector2 pauseSize = _font.MeasureString(paused) * SpriteScale;
+                _spriteBatch.DrawString(_font, paused, new Vector2(Window.ClientBounds.Width / 2, Window.ClientBounds.Height / 2) - pauseSize / 2, Color.White, 0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 0f);
 
+                string pauseHelp = "Press 'P' to unpause";
+                Vector2 pauseHelpSize = _font.MeasureString(pauseHelp) * SpriteScale;
+                _spriteBatch.DrawString(_font, pauseHelp, new Vector2(Window.ClientBounds.Width / 2, Window.ClientBounds.Height / 2 + pauseSize.Y) - pauseHelpSize / 2, Color.White, 0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 0f);
+            }
+
+            else if (Board.State == Board.GameState.GoalPause)
+            {
+                int tempPauseLeft = (int)Math.Ceiling(Board.goalPause - Board.goalPauseElapsed);
+                string pauseLeftString = tempPauseLeft.ToString();
+                Vector2 pauseLeftStringSize = _font.MeasureString(pauseLeftString) * SpriteScale;
+                _spriteBatch.DrawString(_font, pauseLeftString, new Vector2(Window.ClientBounds.Width / 2, Window.ClientBounds.Height / 2) - pauseLeftStringSize / 2, Color.White, 0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 0f);
             }
 
             _spriteBatch.End();
