@@ -22,10 +22,10 @@ namespace Pong.Core
         public float Speed { get; set; }
         public int X { get; init; }
         public float Y { get; set; }
-        public (float, float) ULCorner => (X - Width / 2f, Y + Height / 2f);
-        public (float, float) URCorner => (X + Width / 2f, Y + Height / 2f);
-        public (float, float) BLCorner => (X - Width / 2f, Y - Height / 2f);
-        public (float, float) BRCorner => (X + Width / 2f, Y - Height / 2f);
+        public Point ULCorner => new Point(X - Width / 2f, Y + Height / 2f);
+        public Point URCorner => new Point(X + Width / 2f, Y + Height / 2f);
+        public Point BLCorner => new Point(X - Width / 2f, Y - Height / 2f);
+        public Point BRCorner => new Point(X + Width / 2f, Y - Height / 2f);
         public int Score = 0;
     }
 }

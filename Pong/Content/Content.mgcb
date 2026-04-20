@@ -13,6 +13,13 @@
 
 #---------------------------------- Content ---------------------------------#
 
+#begin SpriteFont/File.spritefont
+/importer:FontDescriptionImporter
+/processor:LocalizedFontProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:SpriteFont/File.spritefont;SpriteFont/Font.spritefont
+
 #begin Sprites/Ball.png
 /importer:TextureImporter
 /processor:TextureProcessor
