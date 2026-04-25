@@ -11,79 +11,52 @@ namespace Pong.Core
     public class Board
     {
         public Random RND = new Random();
-        public Board(int height, Player player1, Player player2, Ball ball)
+        public Board(int height, Player player1, Player player2, Ball ball, int maxScore)
         {
             Height = height;
             Player1 = player1;
             Player2 = player2;
             Ball = ball;
             BorderLength = MathF.Abs(player1.X - player2.X) * 1.2f;
-            State = GameState.GoalPause;
+            State = BoardState.TempPause;
+            MaxScore = maxScore;
         }
 
         public int Height { get; init; }
+        public float Top => Height / 2f;
+        public float Bottom => -Height / 2f;
         public Player Player1 { get; set; }
         public Player Player2 { get; set; }
         public Ball Ball { get; set; }
         public float BorderLength { get; private set; }
-        public GameState State { get; set; }
+        public BoardState State = BoardState.TempPause;
+        public int MaxScore { get; private set; }
+        public Player? Winner { get; set; }
 
-        public enum Direction
-        { Up, Down }
+        public enum BoardState
+        { Playing, TempPause, Paused, GameEnded }
 
-        public enum GameState
-        { Playing, GoalPause, Paused, MainMenu }
-
-        private bool _canMove = true;
-        public void ChangePlayerPos(Player player, double deltaTime, Direction direction)
-        {
-            if (State == GameState.Paused ||
-                State == GameState.MainMenu ||
-                !_canMove)
-                return;
-
-            switch (direction)
-            {
-                case Direction.Up:
-                    float yUp = (float)(player.Y + player.Speed * deltaTime);
-                    if (yUp + player.Height / 2 >= Height / 2)
-                        player.Y = (Height - player.Height) / 2;
-                    else
-                        player.Y = yUp;
-                    break;
-
-                case Direction.Down:
-                    float yDown = (float)(player.Y - player.Speed * deltaTime);
-                    if (yDown - player.Height / 2 <= -Height / 2)
-                        player.Y = (-Height + player.Height) / 2;
-                    else
-                        player.Y = yDown;
-                    break;
-
-                default:
-                    throw new Exception("Unhandled direction");
-            }
-        }
-        private GameState _previousState;
+        private BoardState _previousState;
         public void ChangeState()
         {
-            if (State == Board.GameState.Playing ||
-                State == Board.GameState.GoalPause)
+            if (State == Board.BoardState.Playing ||
+                State == Board.BoardState.TempPause ||
+                State == Board.BoardState.GameEnded)
             {
                 _previousState = State;
-                State = Board.GameState.Paused;
+                State = Board.BoardState.Paused;
             }
 
-            else if (State == Board.GameState.Paused)
+            else if (State == Board.BoardState.Paused)
             {
                 goalPauseElapsed = 0;
-                State = Board.GameState.GoalPause;
+                State = Board.BoardState.TempPause;
 
-                if (_previousState == GameState.Playing)
-                    _canMove = false;
+                if (_previousState == BoardState.Playing)
+                    Player.canMove = false;
 
-                else if (_previousState == GameState.GoalPause)
-                    _canMove = true;
+                else if (_previousState == BoardState.TempPause)
+                    Player.canMove = true;
 
                 _previousState = State;
             }
@@ -91,11 +64,11 @@ namespace Pong.Core
 
         public void ResizePause()
         {
-            if (State == Board.GameState.Playing ||
-                State == Board.GameState.GoalPause)
+            if (State == Board.BoardState.Playing ||
+                State == Board.BoardState.TempPause)
             {
                 _previousState = State;
-                State = Board.GameState.Paused;
+                State = Board.BoardState.Paused;
             }
         }
 
@@ -108,23 +81,20 @@ namespace Pong.Core
             //Debug.WriteLineIf(deltaTime > 0.0167f, deltaTime);
             switch (State)
             {
-                case GameState.MainMenu:
+                case BoardState.Paused:
                     return false;
 
-                case GameState.Paused:
-                    return false;
-
-                case GameState.GoalPause:
+                case BoardState.TempPause:
                     goalPauseElapsed += deltaTime;
                     if (goalPauseElapsed >= goalPause)
                     {
-                        State = GameState.Playing;
+                        State = BoardState.Playing;
                         goalPauseElapsed = 0;
-                        _canMove = true;
+                        Player.canMove = true;
                     }
                     return false;
 
-                case GameState.Playing:
+                case BoardState.Playing:
                     bool pointScored = false;
 
                     float vX = (float)(MathF.Cos(Ball.Direction) * Ball.Speed * deltaTime);
@@ -135,7 +105,7 @@ namespace Pong.Core
 
                     if (ballX - Ball.Size / 2 <= Player1.X + Player1.Width / 2 &&
                         vX < 0 &&
-                        ballX >= Player1.X)
+                        ballX >= Player1.X - Player1.Width / 2)
                     {
                         if (ballY - Ball.Size / 2 <= Player1.URCorner.Y &&
                             ballY + Ball.Size / 2 >= Player1.BRCorner.Y)
@@ -151,22 +121,16 @@ namespace Pong.Core
                             Ball.Direction = MathF.Sign(offset) * MathF.Pow(offset, 2) * MathF.PI / 3; // offset squared because i like it more
                         }                                                                               // the ball feels more predictable
                     }
-                    //else if (vX < 0 &&
-                    //         ballX < Player1.X &&
-                    //         ballX >= Player1.X - Player1.Width / 2)
-                    //{
-                    //    Ball.Direction = -Ball.Direction;
-                    //}
 
                     if (ballX + Ball.Size / 2 >= Player2.X - Player2.Width / 2 &&
                         vX > 0 &&
-                        ballX <= Player2.X)
+                        ballX <= Player2.X + Player2.Width / 2)
                     {
                         if (ballY - Ball.Size / 2 <= Player2.URCorner.Y &&
                             ballY + Ball.Size / 2 >= Player2.BRCorner.Y)
                         {
                             if (Ball.Speed < MaxBallSpeed)
-                                Ball.Speed = (float)(Ball.Speed + 100);
+                                Ball.Speed = Ball.Speed + 100;
 
                             ballX = Player2.X - Player2.Width / 2 - Ball.Size / 2;
 
@@ -210,46 +174,73 @@ namespace Pong.Core
 
                     if (ballX < -BorderLength / 2 * 1.1f)
                     {
-                        NewRoundBallDirection(Player1);
+                        Ball.Direction = NewRoundBallDirection(Player1);
                         ResetBall();
                         Player2.Score++;
                         pointScored = true;
-                        State = GameState.GoalPause;
+                        State = BoardState.TempPause;
                     }
                     else if (ballX > BorderLength / 2 * 1.1f)
                     {
-                        NewRoundBallDirection(Player2);
+                        Ball.Direction = NewRoundBallDirection(Player2);
                         ResetBall();
                         Player1.Score++;
                         pointScored = true;
-                        State = GameState.GoalPause;
+                        State = BoardState.TempPause;
                     }
 
+                    if (pointScored)
+                    {
+                        if (Player1.Score == MaxScore)
+                        {
+                            Winner = Player1;
+                            State = BoardState.GameEnded;
+                        }
+                        else if (Player2.Score == MaxScore)
+                        {
+                            Winner = Player2;
+                            State = BoardState.GameEnded;
+                        }
+                    }
                     return pointScored;
+
+                case BoardState.GameEnded:
+                    return false;
 
                 default:
                     throw new NotImplementedException("Not implemented enum GameState");
             }
         }
 
+        // HOTOVO hodit PlayerChangePos do Player a tam dát i tu bot logiku, ale to se mi nechce teď řešit
+        // HOTOVA (FURT TRASH) udělat cooldown na změnu směru pohybu, aby se tak necukalo, ale to se mi taky nechce řešit teď
+        // HOTOVO udělat nějakou lepší logiku pro boty, aby se třeba snažili odhadnout kam bude míč a ne jenom sledovali jeho pozici, ale to se mi taky nechce řešit teď
+        // STAČÍ DODĚLAT IMPOSSIBLE udělat různé obtížnosti botů, ale to se mi taky nechce řešit teď
+        
         private void ResetBall()
         {
             Ball.X = 0;
             Ball.Y = 0;
             Ball.Speed = Ball.InitialSpeed;
         }
-
-        public void NewRoundBallDirection(Player player)
+        
+        public float NewRoundBallDirection(Player player)
         {
-            if (player.X == Player1.X)
+            float direction;
+            if (player == Player1)
             {
-                Ball.Direction = MathF.PI + MaxAngle - RandomBallDirection();
+                direction = MathF.PI + MaxAngle - RandomBallDirection();
             }
 
-            else if (player.X == Player2.X)
+            else if (player == Player2)
             {
-                Ball.Direction = MaxAngle - RandomBallDirection();
+                direction = MaxAngle - RandomBallDirection();
             }
+
+            else
+                throw new Exception("Player isnt on the board");
+
+            return direction;
         }
         public readonly float MaxAngle = MathF.PI / 3;
         public float RandomBallDirection()
