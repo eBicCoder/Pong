@@ -244,7 +244,7 @@ namespace Pong
                 Text = "Pokračovat",
                 OnClick = () =>
                 {
-                    Board.State = Board.BoardState.TempPause;
+                    Board.ChangeState();
                 }
             });
             PauseButtons.Add(new Button
