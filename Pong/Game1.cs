@@ -2,8 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Pong.Core;
-using SharpDX.DirectWrite;
-using SharpDX.DXGI;
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,6 +10,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static Pong.Core.Board;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
 
 namespace Pong
 {
@@ -27,26 +27,31 @@ namespace Pong
 
         public static float SpriteScale;
 
-        private readonly int BallSize = 32;
+        private readonly uint BallSize = 32;
+        private readonly float BallInitialSpeed = 500;
+        private readonly float BallMaxSpeed = 2000;
+        private readonly uint BallSpeedIncrease = 100;
         private readonly int PlayerWidth = 32;
         private readonly int PlayerHeight = 256;
-        private readonly int PĺayerSpeed = 1000;
+        private readonly uint PlayerSpeed = 1000;
         private readonly int PlayerXPos = 900;
-        private readonly int FieldHeight = 1200;
-        private readonly int MaxScore = 10;
+        private readonly uint FieldHeight = 1200;
+        private readonly uint MaxScore = 10;
         private Board Board { get; set; }
 
         private bool PointScored;
 
         private List<Button> MainMenuButtons = new List<Button>();
-        private List<Button> BotMenuButtons = new List<Button>();
+        private List<Button> BotSelectionButtons = new List<Button>();
+        private List<Button> GameEndedButtons = new List<Button>();
+        public List<Button> PauseButtons = new List<Button>();
 
         private KeyboardState _oldKeyBoardState { get; set; }
 
         private GameState State = GameState.MainMenu;
 
         private enum GameState
-        { MainMenu, BotMenu, Playing}
+        { MainMenu, BotSelection, Playing}
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -65,32 +70,42 @@ namespace Pong
 
             this.IsFixedTimeStep = false;
         }
-
+        
         protected override void Initialize()
         {
             // TODO: Add your initialization logic here
-            SetupBoard("Bot", Player.PlayerType.Hard,
-                       "Bot", Player.PlayerType.Hard);
+            SetupBoard("Bot", Player.PlayerType.Impossible,
+                       "Bot", Player.PlayerType.Impossible,
+                       0);
 
             Board.State = BoardState.TempPause;
-            
-            ChangeSpriteScale();
+
+            OnResize(this, EventArgs.Empty); // initializes the sprite scale and screen center for the first time
 
             base.Initialize();
         }
+        /// <summary>
+        /// Method that initializes the board with the given parameters, used for starting a new game with the right settings when the player clicks on the buttons in the menu
+        /// </summary>
+        /// <param name="player1Name"></param>
+        /// <param name="player1Type"></param>
+        /// <param name="player2Name"></param>
+        /// <param name="player2Type"></param>
+        /// <param name="maxScore"></param>
         private void SetupBoard (string player1Name, Player.PlayerType player1Type, 
-                                 string player2Name, Player.PlayerType player2Type)
+                                 string player2Name, Player.PlayerType player2Type,
+                                 uint maxScore)
         {
-            Ball ball = new Ball(BallSize, 0f);
+            Ball ball = new Ball(BallSize, 0f, BallInitialSpeed, BallMaxSpeed, BallSpeedIncrease, MathF.PI / 3);
 
-            Player player1 = new Player(player1Name, PlayerWidth, PlayerHeight, player1Type, PĺayerSpeed, -PlayerXPos);
-            Player player2 = new Player(player2Name, PlayerWidth, PlayerHeight, player2Type, PĺayerSpeed, PlayerXPos);
+            Player player1 = new Player(player1Name, PlayerWidth, PlayerHeight, player1Type, PlayerSpeed, -PlayerXPos);
+            Player player2 = new Player(player2Name, PlayerWidth, PlayerHeight, player2Type, PlayerSpeed, PlayerXPos);
 
-            Board = new Board(FieldHeight, player1, player2, ball, MaxScore);
+            Board = new Board(FieldHeight, player1, player2, ball, maxScore);
 
             Player[] players = { player1, player2 };
             Player targetPlayer = players[Board.RND.Next(players.Length)];
-            Board.Ball.Direction = Board.NewRoundBallDirection(targetPlayer);
+            Board.Ball.Direction = Board.Ball.NewRoundBallDirection(targetPlayer);
 
             RoundTime = 0;
         }
@@ -107,6 +122,7 @@ namespace Pong
             Pixel = new Texture2D(GraphicsDevice, 1, 1);
             Pixel.SetData(new[] { Color.White });
 
+            // main menu buttons initialization
             MainMenuButtons.Add(new Button
             {
                 RelativePosition = new Vector2(0.5f, 0.55f),
@@ -116,7 +132,8 @@ namespace Pong
                 {
                     State = GameState.Playing;
                     SetupBoard("levý hráč", Player.PlayerType.Human,
-                               "pravý hráč", Player.PlayerType.Human);
+                               "pravý hráč", Player.PlayerType.Human,
+                               MaxScore);
                 }
             });
 
@@ -125,7 +142,7 @@ namespace Pong
                 RelativePosition = new Vector2(0.5f, 0.45f),
                 Size = new Vector2(500, 120),
                 Text = "1 hráč",
-                OnClick = () => State = GameState.BotMenu
+                OnClick = () => State = GameState.BotSelection
             });
 
             MainMenuButtons.Add(new Button
@@ -136,7 +153,8 @@ namespace Pong
                 OnClick = () => Exit()
             });
 
-            BotMenuButtons.Add(new Button
+            // bot menu buttons initialization
+            BotSelectionButtons.Add(new Button
             {
                 RelativePosition = new Vector2(0.5f, 0.35f),
                 Size = new Vector2(500, 120),
@@ -145,11 +163,12 @@ namespace Pong
                 {
                     State = GameState.Playing;
                     SetupBoard("lidský hráč", Player.PlayerType.Human,
-                               "easy bot", Player.PlayerType.Easy);
+                               "easy bot", Player.PlayerType.Easy,
+                               MaxScore);
                 }
             });
 
-            BotMenuButtons.Add(new Button
+            BotSelectionButtons.Add(new Button
             {
                 RelativePosition = new Vector2(0.5f, 0.45f),
                 Size = new Vector2(500, 120),
@@ -158,11 +177,12 @@ namespace Pong
                 {
                     State = GameState.Playing;
                     SetupBoard("lidský hráč", Player.PlayerType.Human,
-                               "normal bot", Player.PlayerType.Normal);
+                               "normal bot", Player.PlayerType.Normal,
+                               MaxScore);
                 }
             });
 
-            BotMenuButtons.Add(new Button
+            BotSelectionButtons.Add(new Button
             {
                 RelativePosition = new Vector2(0.5f, 0.55f),
                 Size = new Vector2(500, 120),
@@ -171,11 +191,12 @@ namespace Pong
                 {
                     State = GameState.Playing;
                     SetupBoard("lidský hráč", Player.PlayerType.Human,
-                               "hard bot", Player.PlayerType.Hard);
+                               "hard bot", Player.PlayerType.Hard,
+                               MaxScore);
                 }
             });
 
-            BotMenuButtons.Add(new Button
+            BotSelectionButtons.Add(new Button
             {
                 RelativePosition = new Vector2(0.5f, 0.65f),
                 Size = new Vector2(500, 120),
@@ -184,11 +205,12 @@ namespace Pong
                 {
                     State = GameState.Playing;
                     SetupBoard("lidský hráč", Player.PlayerType.Human,
-                               "impossible bot", Player.PlayerType.Impossible);
+                               "impossible bot", Player.PlayerType.Impossible,
+                               MaxScore);
                 }
             });
 
-            BotMenuButtons.Add(new Button
+            BotSelectionButtons.Add(new Button
             {
                 RelativePosition = new Vector2(0.5f, 0.8f),
                 Size = new Vector2(500, 120),
@@ -198,6 +220,46 @@ namespace Pong
                     State = GameState.MainMenu;
                 }
             });
+
+            // game ended menu buttons initialization
+            GameEndedButtons.Add(new Button
+            {
+                RelativePosition = new Vector2(0.5f, 0.8f),
+                Size = new Vector2(500, 120),
+                Text = "Do menu",
+                OnClick = () =>
+                {
+                    State = GameState.MainMenu;
+                    SetupBoard("Bot", Player.PlayerType.Impossible,
+                       "Bot", Player.PlayerType.Impossible,
+                       0);
+                }
+            });
+
+            // pause buttons initialization
+            PauseButtons.Add(new Button
+            {
+                RelativePosition = new Vector2(0.5f, 0.5f),
+                Size = new Vector2(700, 120),
+                Text = "Pokračovat",
+                OnClick = () =>
+                {
+                    Board.State = Board.BoardState.TempPause;
+                }
+            });
+            PauseButtons.Add(new Button
+             {
+                 RelativePosition = new Vector2(0.5f, 0.8f),
+                 Size = new Vector2(500, 120),
+                 Text = "Do menu",
+                 OnClick = () =>
+                 {
+                     State = GameState.MainMenu;
+                     SetupBoard("Bot", Player.PlayerType.Impossible,
+                        "Bot", Player.PlayerType.Impossible,
+                        0);
+                 }
+             });
         }
 
         protected override void Update(GameTime gameTime)
@@ -209,27 +271,42 @@ namespace Pong
             // TODO: Add your update logic here
 
             double deltaTime = gameTime.ElapsedGameTime.TotalSeconds;
-            Debug.WriteLineIf(deltaTime > 0.0167d, deltaTime);
+            float maxDeltaTime = 0.02f;
+            if (deltaTime > maxDeltaTime)
+            {
+                Debug.WriteLine(deltaTime);
+                deltaTime = maxDeltaTime; // caps delta time to prevent bugs when the game freezes for a moment (ball goes through player, etc.)
+            }
             var mouseState = Mouse.GetState();
             var viewport = GraphicsDevice.Viewport;
 
-
+            // controls if buttons are being hovered/clicked if game is in the right state
             if (State == GameState.MainMenu)
             {
                 foreach (var b in MainMenuButtons)
                     b.Update(mouseState, viewport);
             }
-            if (State == GameState.BotMenu)
+            else if (State == GameState.BotSelection)
             {
-                foreach (var b in BotMenuButtons)
+                foreach (var b in BotSelectionButtons)
+                    b.Update(mouseState, viewport);
+            }
+            else if (State == GameState.Playing &&
+                Board.State == Board.BoardState.GameEnded)
+            {
+                foreach (var b in GameEndedButtons)
+                    b.Update(mouseState, viewport);
+            }
+            else if (State == GameState.Playing &&
+                Board.State == Board.BoardState.Paused)
+            {
+                foreach (var b in PauseButtons)
                     b.Update(mouseState, viewport);
             }
 
-            //if (State != GameState.Playing)
-            //    return;
 
             KeyboardState keyboardState = Keyboard.GetState();
-            if (Board.Player1.Type == Player.PlayerType.Human)
+            if (Board.Player1.Type == Player.PlayerType.Human) // if player1 == human, check for input, else let the bot play
             {
                 if (keyboardState.IsKeyDown(Keys.W))
                     Board.Player1.ChangePos(Board, deltaTime, Player.Direction.Up);
@@ -241,7 +318,7 @@ namespace Pong
                 Board.Player1.BotPlay(Board, PointScored, deltaTime);
             }
 
-            if (Board.Player2.Type == Player.PlayerType.Human)
+            if (Board.Player2.Type == Player.PlayerType.Human) // same for player2
             {
                 if (keyboardState.IsKeyDown(Keys.Up))
                     Board.Player2.ChangePos(Board, deltaTime, Player.Direction.Up);
@@ -260,28 +337,41 @@ namespace Pong
 
             _oldKeyBoardState = keyboardState;
 
-            PointScored = Board.Tick(deltaTime);
-
+            PointScored = Board.Tick(deltaTime); // if a point is scored, the board will return true, which
+                                                 // is used to reset the round time and for the bots to know when to reset their target position
             if (Board.State == Board.BoardState.Playing)
-                RoundTime += deltaTime;
+                RoundTime += deltaTime; // adds to the round time only when the game is actually being played, not when it's paused or ended
 
             if (PointScored)
-                RoundTime = 0;
+                RoundTime = 0; // resets the round time when a point is scored
 
             base.Update(gameTime);
         }
-
+        /// <summary>
+        /// Handles resize event (changes sprite scale and pauses the game if it's being played to prevent bugs
+        /// with the ball going through the players when the window is resized during gameplay)
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         public void OnResize(object sender, EventArgs e)
         {
             ChangeSpriteScale();
+
+            xScreenCenter = Window.ClientBounds.Width / 2f;
+            yScreenCenter = (Window.ClientBounds.Height + ScoreBarHeight * SpriteScale) / 2f;
+
             if (State == GameState.Playing)
                 Board.ResizePause();
         }
         private int ScoreBarHeight = 150;
+
+        internal float xScreenCenter { get; private set; }
+        internal float yScreenCenter { get; private set; }
+
         private (float, float) BoardToMonitorPos(float x, float y)
         {
-            float X = Window.ClientBounds.Width / 2f + x * SpriteScale;
-            float Y = (Window.ClientBounds.Height + ScoreBarHeight * SpriteScale) / 2f - y * SpriteScale;
+            float X = xScreenCenter + x * SpriteScale;
+            float Y = yScreenCenter - y * SpriteScale;
 
             return (X, Y);
         }
@@ -298,30 +388,39 @@ namespace Pong
         private double RoundTime;
         protected override void Draw(GameTime gameTime)
         {
+            if (State == GameState.Playing &&
+                (Board.State == Board.BoardState.Playing || Board.State == Board.BoardState.TempPause)) 
+                IsMouseVisible = false; // makes the cursor invisible during gameplay, but visible in the menus and when the game is paused/ended
+            else
+                IsMouseVisible = true;
+
             GraphicsDevice.Clear(Color.Black);
             //Debug.WriteLine(gameTime.ElapsedGameTime.TotalSeconds);
             // TODO: Add your drawing code here
             _spriteBatch.Begin();
 
-            
-
             int borderWidth = 32;
 
-            Vector2 textAboveBoard = new Vector2(Window.ClientBounds.Width / 2f, (Window.ClientBounds.Height + ScoreBarHeight * SpriteScale) / 2f - (Board.Height / 2f + borderWidth) * SpriteScale);
+            Vector2 textAboveBoard = new Vector2(
+                xScreenCenter,
+                yScreenCenter - (Board.Height / 2f + borderWidth) * SpriteScale);
+                
+
             // draws round time
             int roundTime = (int)Math.Floor(RoundTime);
             string roundTimeString = roundTime.ToString();
             Vector2 roundTimeStringSize = _font.MeasureString(roundTimeString) * SpriteScale;
-            _spriteBatch.DrawString(_font,
-                                    roundTimeString,
-                                    new Vector2(textAboveBoard.X - roundTimeStringSize.X / 2,
-                                                textAboveBoard.Y - roundTimeStringSize.Y), 
-                                    Color.White, 
-                                    0f, 
-                                    Vector2.Zero,
-                                    SpriteScale,
-                                    SpriteEffects.None,
-                                    0f);
+            _spriteBatch.DrawString(
+                _font,
+                roundTimeString,
+                new Vector2(textAboveBoard.X - roundTimeStringSize.X / 2,
+                            textAboveBoard.Y - roundTimeStringSize.Y), 
+                Color.White, 
+                0f, 
+                Vector2.Zero,
+                SpriteScale,
+                SpriteEffects.None,
+                0f);
 
             // draws the ball
             (float xBallULC, float yBallULC) = BoardToMonitorPos(Board.Ball.ULCorner.X, Board.Ball.ULCorner.Y);
@@ -388,23 +487,25 @@ namespace Pong
             (float xPlayer2, float yPlayer2) = BoardToMonitorPos(Board.Player2.X, Board.Player2.Y);
             string player2ScoreString = Board.Player2.Score.ToString();
             Vector2 player2ScoreStringSize = _font.MeasureString(player2ScoreString) * SpriteScale;
-            _spriteBatch.DrawString(_font,
-                                    player2ScoreString,
-                                    new Vector2(xPlayer2 - player2ScoreStringSize.X / 2,
-                                                textAboveBoard.Y - player1ScoreStringSize.Y),
-                                    Color.White,
-                                    0f,
-                                    Vector2.Zero,
-                                    SpriteScale,
-                                    SpriteEffects.None,
-                                    0f);
+            _spriteBatch.DrawString(
+                _font,
+                player2ScoreString,
+                new Vector2(
+                    xPlayer2 - player2ScoreStringSize.X / 2,
+                    textAboveBoard.Y - player1ScoreStringSize.Y),
+                Color.White,
+                0f,
+                Vector2.Zero,
+                SpriteScale,
+                SpriteEffects.None,
+                0f);
 
             // draws top border
             _spriteBatch.Draw(
-                _player,
-                new Vector2
-                    (Window.ClientBounds.Width / 2f - Board.BorderLength / 2 * SpriteScale,
-                    (Window.ClientBounds.Height + ScoreBarHeight * SpriteScale) / 2f - (Board.Height / 2f + borderWidth) * SpriteScale),
+                _border,
+                new Vector2(
+                    xScreenCenter - Board.BorderLength / 2 * SpriteScale,
+                    yScreenCenter - (Board.Height / 2f + borderWidth) * SpriteScale),
                 new Rectangle(0, 0, (int)(Board.BorderLength), borderWidth),
                 Color.White,
                 0f,
@@ -414,10 +515,10 @@ namespace Pong
                 0);
             // draws bottom border
             _spriteBatch.Draw(
-                _player,
-                new Vector2
-                    (Window.ClientBounds.Width / 2f - Board.BorderLength / 2 * SpriteScale,
-                    (Window.ClientBounds.Height + ScoreBarHeight * SpriteScale) / 2f - (-Board.Height / 2f) * SpriteScale),
+                _border,
+                new Vector2(
+                    xScreenCenter - Board.BorderLength / 2 * SpriteScale,
+                    yScreenCenter - (-Board.Height / 2f) * SpriteScale),
                 new Rectangle(0, 0, (int)(Board.BorderLength), borderWidth),
                 Color.White,
                 0f,
@@ -425,69 +526,78 @@ namespace Pong
                 SpriteScale,
                 SpriteEffects.None,
                 0);
-
+            // draws pause menu if the game is paused
             if (Board.State == Board.BoardState.Paused &&
-                State == GameState.Playing)
+                     State == GameState.Playing)
             {
-                string paused = "Paused";
-                Vector2 pauseSize = _font.MeasureString(paused) * SpriteScale;
-                _spriteBatch.DrawString(_font, paused, new Vector2(Window.ClientBounds.Width / 2, Window.ClientBounds.Height / 2) - pauseSize / 2, Color.White, 0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 0f);
+                var viewport = GraphicsDevice.Viewport;
 
-                string pauseHelp = "Press 'P' to unpause";
-                Vector2 pauseHelpSize = _font.MeasureString(pauseHelp) * SpriteScale;
-                _spriteBatch.DrawString(_font, pauseHelp, new Vector2(Window.ClientBounds.Width / 2, Window.ClientBounds.Height / 2 + pauseSize.Y) - pauseHelpSize / 2, Color.White, 0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 0f);
+                foreach (var b in PauseButtons)
+                    b.Draw(_spriteBatch, _font, viewport);
             }
-
+            // draws temp pause time left if the game is in temp pause (between rounds and after unpausing)
             else if (Board.State == Board.BoardState.TempPause &&
                      State == GameState.Playing)
-            {       
-                int tempPauseLeft = (int)Math.Ceiling(Board.goalPause - Board.goalPauseElapsed);
+            {
+                int tempPauseLeft = (int)Math.Ceiling(Board.PauseLength - Board.PauseElapsed);
                 string pauseLeftString = tempPauseLeft.ToString();
                 Vector2 pauseLeftStringSize = _font.MeasureString(pauseLeftString) * SpriteScale;
-                _spriteBatch.DrawString(_font, pauseLeftString, new Vector2(Window.ClientBounds.Width / 2, Window.ClientBounds.Height / 2) - pauseLeftStringSize / 2, Color.White, 0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 0f);
-            }
-
-            else if (Board.State == Board.BoardState.GameEnded &&
-                     State == GameState.Playing)
-            {
-                string winnerString = $"Hru vyhrál {Board.Winner.Name}!";
-                Vector2 winnerStringSize = _font.MeasureString(winnerString) * SpriteScale;
                 _spriteBatch.DrawString(
                     _font, 
-                    winnerString, 
+                    pauseLeftString, 
                     new Vector2(
-                        Window.ClientBounds.Width / 2, 
-                        Window.ClientBounds.Height / 2)
-                    - winnerStringSize / 2, 
+                        Window.ClientBounds.Width / 2,
+                        Window.ClientBounds.Height / 2) - pauseLeftStringSize / 2, 
                     Color.White, 0f, 
                     Vector2.Zero, 
                     SpriteScale, 
                     SpriteEffects.None, 
                     0f);
             }
+            // draws game ended menu and winner if the game ended
+            else if (Board.State == Board.BoardState.GameEnded &&
+                     State == GameState.Playing)
+            {
+                string winnerString = $"Vyhrál {Board.Winner}";
+                Vector2 winnerStringSize = _font.MeasureString(winnerString);
+                Button winner = new Button
+                {
+                    RelativePosition = new Vector2(0.5f, 0.5f),
+                    Size = new Vector2(winnerStringSize.X, 120),
+                    Text = $"Vyhrál {Board.Winner.Name}",
+                };
 
+                var viewport = GraphicsDevice.Viewport;
+
+                winner.Draw(_spriteBatch, _font, viewport);
+
+                foreach (var b in GameEndedButtons)
+                    b.Draw(_spriteBatch, _font, viewport);
+            }
+            // draws pause menu if the game is paused
+            else if (Board.State == Board.BoardState.Paused &&
+                     State == GameState.Playing)
+            {
+                var viewport = GraphicsDevice.Viewport;
+
+                foreach (var b in PauseButtons)
+                    b.Draw(_spriteBatch, _font, viewport);
+            }
+            // draws main menu
             else if (State == GameState.MainMenu)
             {
-                // dodělat nějaké menu (cool by mohla být hra 2 botů na pozadí)
                 var viewport = GraphicsDevice.Viewport;
 
                 foreach (var b in MainMenuButtons)
                     b.Draw(_spriteBatch, _font, viewport);
-
-                //_spriteBatch.End();
-                //return;
             }
-
-            else if (State == GameState.BotMenu)
+            // draws bot selection
+            else if (State == GameState.BotSelection)
             {
-                // dodělat nějaké menu (cool by mohla být hra 2 botů na pozadí)
                 var viewport = GraphicsDevice.Viewport;
 
-                foreach (var b in BotMenuButtons)
+                foreach (var b in BotSelectionButtons)
                     b.Draw(_spriteBatch, _font, viewport);
-
-                //_spriteBatch.End();
-                //return;
             }
 
             _spriteBatch.End();
@@ -495,7 +605,12 @@ namespace Pong
         }
 
         
-
+        /// <summary>
+        /// Method for detecting key press
+        /// </summary>
+        /// <param name="keyboardState"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
         private bool IsKeyPressed(KeyboardState keyboardState, Keys key)
         {
             bool isKeyPressed = false;
